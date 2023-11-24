@@ -12,6 +12,7 @@ import (
 	httpext "github.com/go-playground/pkg/v5/net/http"
 	unsafeext "github.com/go-playground/pkg/v5/unsafe"
 	. "github.com/go-playground/pkg/v5/values/option"
+	"github.com/google/uuid"
 	"github.com/relay-io/relay-sdk-go/core/job"
 	"io"
 	"net/http"
@@ -135,6 +136,7 @@ func (c *Client[P, S]) Enqueue(ctx context.Context, mode job.EnqueueMode, jobs [
 	}
 	resp := result.Unwrap()
 	defer resp.Body.Close()
+
 	switch resp.StatusCode {
 	case http.StatusAccepted:
 		return nil
@@ -178,6 +180,42 @@ func (c *Client[P, S]) Get(ctx context.Context, queue, jobID string) (Option[job
 	return Some[job.Existing[P, S]](result.Unwrap()), nil
 }
 
+// Exists returns if a `Existing` job exists.
+//
+// # Errors
+//
+// Will return `Err` on an unrecoverable network error.\
+func (c *Client[P, S]) Exists(ctx context.Context, queue, jobID string) (bool, error) {
+	url := fmt.Sprintf("%s/v2/queues/%s/jobs/%s", c.baseURL, url.QueryEscape(queue), url.QueryEscape(jobID))
+	fn := func(ctx context.Context) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create get request")
+		}
+		return req, nil
+	}
+	result := httpext.DoRetryableResponse(ctx, c.onRetryRetryFn, httpext.IsRetryableStatusCode, c.client, fn)
+	if result.IsErr() {
+		return false, errors.Wrap(result.Err(), "failed to fetch job")
+	}
+	resp := result.Unwrap()
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		b, _ := io.ReadAll(resp.Body)
+		return false, job.ErrRequest{
+			Message:     unsafeext.BytesToString(b),
+			StatusCode:  Some(resp.StatusCode),
+			IsRetryable: false,
+		}
+	}
+}
+
 // Delete deletes an `Existing` job.
 //
 // # Errors
@@ -199,9 +237,156 @@ func (c *Client[P, S]) Delete(ctx context.Context, queue, jobID string) error {
 	}
 	resp := result.Unwrap()
 	defer resp.Body.Close()
+
 	switch resp.StatusCode {
 	case http.StatusOK:
 		return nil
+	default:
+		b, _ := io.ReadAll(resp.Body)
+		return job.ErrRequest{
+			Message:     unsafeext.BytesToString(b),
+			StatusCode:  Some(resp.StatusCode),
+			IsRetryable: false,
+		}
+	}
+}
+
+// Complete deletes an in-flight `Existing` job.
+//
+// # Errors
+//
+// Will return `Err` on:
+// - an unrecoverable network error.
+// - The `Existing` job doesn't exist.
+func (c *Client[P, S]) Complete(ctx context.Context, queue, jobID string, runID uuid.UUID) error {
+	url := fmt.Sprintf("%s/v2/queues/%s/jobs/%s/run-id/%s", c.baseURL, url.QueryEscape(queue), url.QueryEscape(jobID), runID)
+	fn := func(ctx context.Context) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create complete request")
+		}
+		return req, nil
+	}
+	result := httpext.DoRetryableResponse(ctx, c.onRetryRetryFn, httpext.IsRetryableStatusCode, c.client, fn)
+	if result.IsErr() {
+		return errors.Wrap(result.Err(), "failed to make complete job request")
+	}
+	resp := result.Unwrap()
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return nil
+	default:
+		b, _ := io.ReadAll(resp.Body)
+		return job.ErrRequest{
+			Message:     unsafeext.BytesToString(b),
+			StatusCode:  Some(resp.StatusCode),
+			IsRetryable: false,
+		}
+	}
+}
+
+// Heartbeat sends a heartbeat request to an in-flight `Existing` job indicating it is still processing, resetting
+// the timeout. Optionally you can update the `Existing` jobs state during the same request.
+//
+// # Errors
+//
+// Will return `Err` on:
+// - an unrecoverable network error.
+// - if the `Existing` job doesn't exist.
+func (c *Client[P, S]) Heartbeat(ctx context.Context, queue, jobID string, runID uuid.UUID, state Option[S]) (err error) {
+	var b []byte
+	if state.IsSome() {
+		b, err = json.Marshal(state)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal state for heartbeat")
+		}
+	}
+	url := fmt.Sprintf("%s/v2/queues/%s/jobs/%s/run-id/%s", c.baseURL, url.QueryEscape(queue), url.QueryEscape(jobID), runID)
+	fn := func(ctx context.Context) (req *http.Request, err error) {
+		if state.IsSome() {
+			req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewReader(b))
+		} else {
+			req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, nil)
+		}
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create heartbeat request")
+		}
+		req.Header.Set(httpext.ContentType, httpext.ApplicationJSON)
+		return req, nil
+	}
+	result := httpext.DoRetryableResponse(ctx, c.onRetryRetryFn, httpext.IsRetryableStatusCode, c.client, fn)
+	if result.IsErr() {
+		return errors.Wrap(result.Err(), "failed to make heartbeat job request")
+	}
+	resp := result.Unwrap()
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusAccepted:
+		return nil
+	case http.StatusNotFound:
+		return job.ErrNotFound{Err: errors.Wrap(result.Err(), "failed to heartbeat job")}
+	default:
+		b, _ := io.ReadAll(resp.Body)
+		return job.ErrRequest{
+			Message:     unsafeext.BytesToString(b),
+			StatusCode:  Some(resp.StatusCode),
+			IsRetryable: false,
+		}
+	}
+}
+
+// Requeue re-enqueues an existing in-flight `Existing` job to be run again or spawn a new set of jobs
+// atomically.
+//
+// The `Existing` jobs queue, id and `run_id` must match an existing in-flight Job.
+// This is primarily used to schedule a new/the next run of a singleton job. This provides the
+// ability for self-perpetuating scheduled jobs in an atomic manner.
+//
+// Reschedule also allows you to change the jobs `queue` and `id` during the reschedule.
+// This is allowed to facilitate advancing a job through a distributed pipeline/state
+// machine atomically if that is more appropriate than advancing using the jobs state alone.
+//
+// The mode will be used to determine the behaviour if a conflicting record already exists,
+// just like when enqueuing jobs.
+//
+// If the `Existing` job no longer exists or is not in-flight, this will return without error and will
+// not enqueue any jobs.
+//
+// # Errors
+//
+// Will return `Err` on:
+// - an unrecoverable network error.
+// - if one of the `Existing` jobs exists when mode is unique.
+func (c *Client[P, S]) Requeue(ctx context.Context, mode job.EnqueueMode, queue, jobID string, runID uuid.UUID, jobs []job.New[P, S]) (err error) {
+	b, err := json.Marshal(jobs)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal jobs for requeue")
+	}
+	url := fmt.Sprintf("%s/v2/queues/%s/jobs/%s/run-id/%s?mode=%s", c.baseURL, url.QueryEscape(queue), url.QueryEscape(jobID), runID, mode.String())
+	fn := func(ctx context.Context) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(b))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create requeue request")
+		}
+		req.Header.Set(httpext.ContentType, httpext.ApplicationJSON)
+		return req, nil
+	}
+	result := httpext.DoRetryableResponse(ctx, c.onRetryRetryFn, httpext.IsRetryableStatusCode, c.client, fn)
+	if result.IsErr() {
+		return errors.Wrap(result.Err(), "failed to make requeue job request")
+	}
+	resp := result.Unwrap()
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusAccepted:
+		return nil
+	case http.StatusConflict:
+		b, _ := io.ReadAll(resp.Body)
+		return job.ErrAlreadyExists{Err: errors.New(unsafeext.BytesToString(b))}
 	default:
 		b, _ := io.ReadAll(resp.Body)
 		return job.ErrRequest{
