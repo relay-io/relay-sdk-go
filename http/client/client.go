@@ -448,6 +448,12 @@ func (c *Client[P, S]) Poll(ctx context.Context, queue string, numJobs uint) ([]
 	}
 }
 
+// Poller Creates a new poller that will handle asynchronously polling and distributing `Existing`
+// jobs to be processed by calling the supplied `Runner`.
+func (c *Client[P, S]) Poller(queue string, runner Runner[P, S]) *PollBuilder[P, S, Runner[P, S]] {
+	return newPollBuilder(c, queue, runner)
+}
+
 func (c *Client[P, S]) onRetryRetryFn(ctx context.Context, origErr error, retryReason string, attempt int) Option[error] {
 	if err := c.retryBackoff.Sleep(ctx, attempt); err != nil {
 		if errors.Is(origErr, backoff.ErrMaxAttemptsReached) {
