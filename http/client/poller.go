@@ -6,6 +6,7 @@ import (
 	typesext "github.com/go-playground/pkg/v5/types"
 	valuesext "github.com/go-playground/pkg/v5/values"
 	"github.com/relay-io/relay-sdk-go/core/job"
+	"runtime"
 	"sync"
 )
 
@@ -32,7 +33,7 @@ type PollBuilder[P, S any, R Runner[P, S]] struct {
 
 func newPollBuilder[P, S any, R Runner[P, S]](c *Client[P, S], queue string, runner R) *PollBuilder[P, S, R] {
 	return &PollBuilder[P, S, R]{
-		workers: 10,
+		workers: runtime.NumCPU(),
 		queue:   queue,
 		runner:  runner,
 	}
@@ -40,6 +41,8 @@ func newPollBuilder[P, S any, R Runner[P, S]](c *Client[P, S], queue string, run
 
 // NumWorkers sets the number of backend async workers indicating the maximum number of in-flight
 // `Job`s.
+//
+// Default is number of logical cores on the machine.
 func (b *PollBuilder[P, S, R]) NumWorkers(n int) *PollBuilder[P, S, R] {
 	b.workers = n
 	return b

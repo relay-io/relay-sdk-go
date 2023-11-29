@@ -16,11 +16,11 @@ const (
 func (m EnqueueMode) String() string {
 	switch m {
 	case Unique:
-		return "Unique"
+		return "unique"
 	case Ignore:
-		return "Ignore"
+		return "ignore"
 	case Replace:
-		return "Replace"
+		return "replace"
 	}
 	return ""
 }
