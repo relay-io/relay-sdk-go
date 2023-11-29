@@ -33,6 +33,7 @@ type PollBuilder[P, S any, R Runner[P, S]] struct {
 
 func newPollBuilder[P, S any, R Runner[P, S]](c *Client[P, S], queue string, runner R) *PollBuilder[P, S, R] {
 	return &PollBuilder[P, S, R]{
+		client:  c,
 		workers: runtime.NumCPU(),
 		queue:   queue,
 		runner:  runner,
@@ -79,7 +80,6 @@ func (p *Poller[P, S, R]) Start(ctx context.Context) (err error) {
 			p.worker(ctx, ch)
 		}()
 	}
-
 	err = p.poller(ctx, ch)
 
 	close(ch)
