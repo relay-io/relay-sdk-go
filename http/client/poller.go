@@ -5,6 +5,7 @@ import (
 	"github.com/go-playground/errors/v5"
 	typesext "github.com/go-playground/pkg/v5/types"
 	valuesext "github.com/go-playground/pkg/v5/values"
+	. "github.com/go-playground/pkg/v5/values/option"
 	"github.com/relay-io/relay-sdk-go/core/job"
 	"runtime"
 	"sync"
@@ -21,6 +22,100 @@ type Runner[P, S any] interface {
 type JobHelper[P, S any] struct {
 	client *Client[P, S]
 	job    job.Existing[P, S]
+}
+
+// Job returns the `Existing` job to be processed.
+func (h JobHelper[P, S]) Job() job.Existing[P, S] {
+	return h.job
+}
+
+// InnerClient returns a reference to the inner Relay client instance for interacting with Relay when the
+// needing to do things the helper functions for the inner job don't apply to such as spawning
+// one-off jobs not related to the existing running job in any way.
+//
+// It is rare to need the inner client and helper functions should be preferred in most cases.
+func (h JobHelper[P, S]) InnerClient() *Client[P, S] {
+	return h.client
+}
+
+// Complete completes/deletes this in-flight `Existing` job.
+//
+// # Panics
+//
+// If the `Existing` job doesn't have a `run_id` set.
+//
+// # Errors
+//
+// Will return `Err` on:
+// - an unrecoverable network error.
+// - The `Existing` job doesn't exist.
+func (h JobHelper[P, S]) Complete(ctx context.Context) error {
+	return h.client.Complete(ctx, h.job.Queue, h.job.ID, h.job.RunID.Unwrap())
+}
+
+// Delete removes/delete the `Existing` job.
+//
+// # Errors
+//
+// Will return `Err` on:
+// - an unrecoverable network error.
+func (h JobHelper[P, S]) Delete(ctx context.Context) error {
+	return h.client.Delete(ctx, h.job.Queue, h.job.ID)
+}
+
+// Exists returns if the `Existing` job still exists.
+//
+// # Errors
+//
+// Will return `Err` on an unrecoverable network error.
+func (h JobHelper[P, S]) Exists(ctx context.Context) (bool, error) {
+	return h.client.Exists(ctx, h.job.Queue, h.job.ID)
+}
+
+// Heartbeat sends a heartbeat request to this in-flight `Existing` job indicating it is still processing, resetting
+// the timeout. Optionally you can update the `Existing` jobs state during the same request.
+//
+// # Panics
+//
+// If the `Existing` job doesn't have a `run_id` set.
+//
+// # Errors
+//
+// Will return `Err` on:
+// - an unrecoverable network error.
+// - if the `Existing` job doesn't exist.
+func (h JobHelper[P, S]) Heartbeat(ctx context.Context, state Option[S]) error {
+	return h.client.Heartbeat(ctx, h.job.Queue, h.job.ID, h.job.RunID.Unwrap(), state)
+}
+
+// Requeue re-queues this in-flight `Existing` job to be run again or spawn a new set of jobs
+// atomically.
+//
+// The `Existing` jobs queue, id and `run_id` must match an existing in-flight Job.
+// This is primarily used to schedule a new/the next run of a singleton job. This provides the
+// ability for self-perpetuating scheduled jobs in an atomic manner.
+//
+// Reschedule also allows you to change the jobs `queue` and `id` during the reschedule.
+// This is allowed to facilitate advancing a job through a distributed pipeline/state
+// machine atomically if that is more appropriate than advancing using the jobs state alone.
+//
+// The mode will be used to determine the behaviour if a conflicting record already exists,
+// just like when enqueuing jobs.
+//
+// If the `Existing` job no longer exists or is not in-flight, this will return without error and will
+// not enqueue any jobs.
+//
+// # Panics
+//
+// If the `Existing` job doesn't have a `run_id` set.
+//
+// # Errors
+//
+// Will return `Err` on:
+// - an unrecoverable network error.
+// - if one of the `Existing` jobs exists when mode is unique.
+func (h JobHelper[P, S]) Requeue(ctx context.Context, mode job.EnqueueMode, jobs []job.New[P, S]) error {
+	return h.client.Requeue(ctx, mode, h.job.Queue, h.job.ID, h.job.RunID.Unwrap(), jobs)
 }
 
 // PollBuilder is used to configure and build Poller for use.

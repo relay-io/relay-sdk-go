@@ -53,29 +53,69 @@ func TestPoller(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
-	assert.Equal(2, len(mr.jobs))
-	assert.Equal(j.Queue, mr.jobs[0].Queue)
-	assert.Equal(j.ID, mr.jobs[0].ID)
-	assert.Equal(j2.Queue, mr.jobs[1].Queue)
-	assert.Equal(j2.ID, mr.jobs[1].ID)
+	assert.Equal(2, len(mr.helpers))
+	assert.Equal(j.Queue, mr.helpers[0].job.Queue)
+	assert.Equal(j.ID, mr.helpers[0].job.ID)
+	assert.Equal(j2.Queue, mr.helpers[1].job.Queue)
+	assert.Equal(j2.ID, mr.helpers[1].job.ID)
+
+	jobH1 := mr.helpers[0]
+	jobH2 := mr.helpers[1]
+
+	err = jobH2.Complete(ctx)
+	assert.NoError(err)
+
+	exists, err := jobH2.Exists(ctx)
+	assert.NoError(err)
+	assert.False(exists)
+
+	err = jobH1.Heartbeat(ctx, Some(5))
+	assert.NoError(err)
+
+	maybeExisting, err := jobH1.InnerClient().Get(ctx, jobH1.Job().Queue, jobH1.Job().ID)
+	assert.NoError(err)
+	assert.True(maybeExisting.IsSome())
+
+	existing := maybeExisting.Unwrap()
+	assert.Equal(5, existing.State.Unwrap())
+	assert.Equal(jobH1.Job().RunID, existing.RunID)
+
+	j.State = Some(6)
+	err = jobH1.Requeue(ctx, job.Unique, []job.New[int, int]{j})
+	assert.NoError(err)
+
+	maybeExisting, err = jobH1.InnerClient().Get(ctx, jobH1.Job().Queue, jobH1.Job().ID)
+	assert.NoError(err)
+	assert.True(maybeExisting.IsSome())
+
+	existing = maybeExisting.Unwrap()
+	assert.Equal(6, existing.State.Unwrap())
+	assert.True(existing.RunID.IsNone())
+
+	err = jobH1.Delete(ctx)
+	assert.NoError(err)
+
+	exists, err = jobH1.Exists(ctx)
+	assert.NoError(err)
+	assert.False(exists)
 }
 
 var _ Runner[int, int] = (*mockRunner)(nil)
 
 type mockRunner struct {
-	jobs []job.Existing[int, int]
-	m    sync.Mutex
+	helpers []JobHelper[int, int]
+	m       sync.Mutex
 }
 
 func (m *mockRunner) Run(ctx context.Context, helper JobHelper[int, int]) {
 	m.m.Lock()
 	defer m.m.Unlock()
-	m.jobs = append(m.jobs, helper.job)
+	m.helpers = append(m.helpers, helper)
 }
 
 func (m *mockRunner) Len() int {
 	m.m.Lock()
-	l := len(m.jobs)
+	l := len(m.helpers)
 	m.m.Unlock()
 	return l
 }
