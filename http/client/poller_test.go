@@ -77,7 +77,7 @@ func TestPoller(t *testing.T) {
 	assert.True(maybeExisting.IsSome())
 
 	existing := maybeExisting.Unwrap()
-	assert.Equal(5, existing.State.Unwrap())
+	assert.Equal(Some(5), existing.State)
 	assert.Equal(jobH1.Job().RunID, existing.RunID)
 
 	j.State = Some(6)
