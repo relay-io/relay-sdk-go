@@ -1,19 +1,3 @@
-# relay-sdk-go
-[![GoDoc](https://godoc.org/github.com/go-playground/relay-client-go?status.svg)](https://pkg.go.dev/github.com/relay-io/relay-sdk-go)
-![License](https://img.shields.io/dub/l/vibe-d.svg)
-
-Relay SDK containing Go types, primitives, Client and Poller/consumer.
-
-Requirements
-------------
-- Go 1.21+
-
-Usage
-------
-See [example here](/_examples).
-
-processor example.
-```go
 package main
 
 import (
@@ -84,13 +68,3 @@ func main() {
 		panic(err)
 	}
 }
-```
-
-How to Contribute
-------
-
-Make a pull request...
-
-License
--------
-Distributed under MIT License, please 
