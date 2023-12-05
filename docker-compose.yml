@@ -11,7 +11,7 @@ services:
       POSTGRES_HOST_AUTH_METHOD: trust
 
   relay:
-    image: ghcr.io/relay-io/relay:sha-e749824
+    image: ghcr.io/relay-io/relay:latest
     environment:
       - DATABASE_URL=postgres://username:pass@postgres:5432/relay?sslmode=disable
       - HTTP_PORT=8080
