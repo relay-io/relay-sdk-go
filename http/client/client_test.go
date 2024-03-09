@@ -3,13 +3,14 @@ package client
 import (
 	"context"
 	"errors"
+	"os"
+	"testing"
+	"time"
+
 	. "github.com/go-playground/pkg/v5/values/option"
 	"github.com/google/uuid"
 	"github.com/relay-io/relay-sdk-go/core/job"
 	"github.com/stretchr/testify/require"
-	"os"
-	"testing"
-	"time"
 )
 
 var baseURL = "http://127.0.0.1:8080"

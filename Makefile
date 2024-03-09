@@ -1,5 +1,3 @@
-GOCMD=GO111MODULE=on go
-
 deps:
 	go mod download
 	go mod tidy
@@ -14,10 +12,11 @@ lint: linters-install deps
 	golangci-lint run
 
 test: lint
-	RELAY_URL="http://127.0.0.1:8080" $(GOCMD) test -cover -race ./...
+	RELAY_URL="http://127.0.0.1:8080" \
+	go test -cover -race ./...
 
 test.ci: deps
-	$(GOCMD) test -cover -race ./...
+	go test -cover -race ./...
 
 services.up:
 	@docker-compose up -d
@@ -29,6 +28,6 @@ services.down:
 test.all: services.up test services.down
 
 bench:
-	$(GOCMD) test -bench=. -benchmem ./...
+	go test -bench=. -benchmem ./...
 
 .PHONY: deps test test.ci test.all lint linters-install services.up services.down
