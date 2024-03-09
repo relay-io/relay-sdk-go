@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+
 	. "github.com/go-playground/pkg/v5/values/option"
 	"github.com/relay-io/relay-sdk-go/core/job"
 	"github.com/relay-io/relay-sdk-go/http/client"
@@ -24,9 +25,9 @@ type Processor struct {
 
 func (p *Processor) Run(ctx context.Context, helper client.JobHelper[payload, state]) {
 	// to something with job & state
-	job := helper.Job()
-	state := job.State.UnwrapOrDefault()
-	fmt.Println(job, state)
+	j := helper.Job()
+	state := j.State.UnwrapOrDefault()
+	fmt.Println(j, state)
 
 	err := helper.Complete(ctx)
 	if err != nil {

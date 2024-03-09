@@ -2,13 +2,14 @@ package client
 
 import (
 	"context"
+	"runtime"
+	"sync"
+
 	"github.com/go-playground/errors/v5"
 	typesext "github.com/go-playground/pkg/v5/types"
 	valuesext "github.com/go-playground/pkg/v5/values"
 	. "github.com/go-playground/pkg/v5/values/option"
 	"github.com/relay-io/relay-sdk-go/core/job"
-	"runtime"
-	"sync"
 )
 
 // Runner is an interface used by the `Poller` to execute a `Job` after fetching it to be processed.
@@ -29,7 +30,7 @@ func (h JobHelper[P, S]) Job() job.Existing[P, S] {
 	return h.job
 }
 
-// InnerClient returns a reference to the inner Relay client instance for interacting with Relay when the
+// InnerClient returns a reference to the inner Relay client instance for interacting with Relay when
 // needing to do things the helper functions for the inner job don't apply to such as spawning
 // one-off jobs not related to the existing running job in any way.
 //
@@ -47,7 +48,7 @@ func (h JobHelper[P, S]) InnerClient() *Client[P, S] {
 // # Errors
 //
 // Will return `Err` on:
-// - an unrecoverable network error.
+// - An unrecoverable network error.
 // - The `Existing` job doesn't exist.
 func (h JobHelper[P, S]) Complete(ctx context.Context) error {
 	return h.client.Complete(ctx, h.job.Queue, h.job.ID, h.job.RunID.Unwrap())
@@ -82,8 +83,8 @@ func (h JobHelper[P, S]) Exists(ctx context.Context) (bool, error) {
 // # Errors
 //
 // Will return `Err` on:
-// - an unrecoverable network error.
-// - if the `Existing` job doesn't exist.
+// - An unrecoverable network error.
+// - If the `Existing` job doesn't exist.
 func (h JobHelper[P, S]) Heartbeat(ctx context.Context, state Option[S]) error {
 	return h.client.Heartbeat(ctx, h.job.Queue, h.job.ID, h.job.RunID.Unwrap(), state)
 }
@@ -112,8 +113,8 @@ func (h JobHelper[P, S]) Heartbeat(ctx context.Context, state Option[S]) error {
 // # Errors
 //
 // Will return `Err` on:
-// - an unrecoverable network error.
-// - if one of the `Existing` jobs exists when mode is unique.
+// - An unrecoverable network error.
+// - If one of the `Existing` jobs exists when mode is unique.
 func (h JobHelper[P, S]) Requeue(ctx context.Context, mode job.EnqueueMode, jobs []job.New[P, S]) error {
 	return h.client.Requeue(ctx, mode, h.job.Queue, h.job.ID, h.job.RunID.Unwrap(), jobs)
 }
@@ -235,10 +236,10 @@ func (p *Poller[P, S, R]) poller(ctx context.Context, ch chan<- JobHelper[P, S])
 			return errors.Wrap(err, "failed to fetch next Job")
 		}
 
-		for _, job := range jobs {
+		for _, j := range jobs {
 			ch <- JobHelper[P, S]{
 				client: p.client,
-				job:    job,
+				job:    j,
 			}
 		}
 		numJobs -= uint(len(jobs))

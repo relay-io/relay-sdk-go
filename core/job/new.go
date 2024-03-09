@@ -1,9 +1,10 @@
 package job
 
 import (
+	"time"
+
 	. "github.com/go-playground/pkg/v5/values/option"
 	"github.com/google/uuid"
-	"time"
 )
 
 // New defines all information needed to enqueue or requeue a job.

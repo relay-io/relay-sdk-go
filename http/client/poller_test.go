@@ -2,13 +2,14 @@ package client
 
 import (
 	"context"
+	"sync"
+	"testing"
+	"time"
+
 	. "github.com/go-playground/pkg/v5/values/option"
 	"github.com/google/uuid"
 	"github.com/relay-io/relay-sdk-go/core/job"
 	"github.com/stretchr/testify/require"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestPoller(t *testing.T) {

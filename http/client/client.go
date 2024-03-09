@@ -5,6 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"time"
+
 	"github.com/go-playground/backoff-sys"
 	"github.com/go-playground/errors/v5"
 	bytesext "github.com/go-playground/pkg/v5/bytes"
@@ -14,10 +19,6 @@ import (
 	. "github.com/go-playground/pkg/v5/values/option"
 	"github.com/google/uuid"
 	"github.com/relay-io/relay-sdk-go/core/job"
-	"io"
-	"net/http"
-	"net/url"
-	"time"
 )
 
 // Builder is used to build a Relay Client for use.
